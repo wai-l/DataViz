@@ -1,0 +1,173 @@
+---
+title: "2022Week42_StrangerThings"
+author: "Wai"
+date: "2022-10-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Enviroment Set Up and Loading Data Set
+library(tibble)
+library(dplyr)
+library(stringr)
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(tidytuesdayR)
+library(sysfonts)
+install.packages("tidytext")
+library(tidytext)
+install.packages("stopwords")
+library(stopwords)
+install.packages("textdata")
+library(textdata)
+install.packages("ggforce")
+library(ggforce)
+install.packages("showtext")
+library(showtext)
+
+tuesdata <- tidytuesdayR::tt_load(2022, week = 42)
+episodes <- tuesdata$episodes
+dialogue <- tuesdata$stranger_things_all_dialogue
+
+# Test field
+
+```
+
+```{r}
+# Preview Data
+glimpse(episodes)
+glimpse(dialogue)
+dialogue
+episodes
+```
+```{r}
+# Data manipulation
+# 1. Splitting lines into words
+dialogue_words <- dialogue %>% 
+  select(season, episode, line, start_time, end_time, dialogue) %>% 
+  unnest_tokens(word, dialogue) %>% 
+  anti_join(get_stopwords(), by = "word") %>% 
+  na.omit()
+# Check the result
+glimpse(dialogue_words)
+dialogue_words
+
+# 2. Sentiment Analysis
+word_sentiment <- dialogue_words %>% 
+  inner_join(get_sentiments("nrc")) 
+
+glimpse(word_sentiment)
+summary(word_sentiment)
+word_sentiment %>% 
+  count(season, episode, sentiment)
+
+# 2.2 p & n count
+season_sentiment <- word_sentiment %>% 
+  filter(sentiment == "positive"|sentiment == "negative") %>% 
+  count(season, episode, sentiment) %>% 
+  # transpose/pivot the graph, fill = 0 replace missing values with 0
+  spread(sentiment, n, fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+# 2.3 Rename values in season column
+season_sen_mod <- season_sentiment %>% 
+  mutate(season = recode(season, "1" = "Season 1", "2"= "Season 2", "3" = "Season 3", "4" = "Season 4"))
+
+
+```
+
+```{r}
+# The plot
+# Text and Theme
+font_add_google("Roboto Slab", "Font")
+showtext_auto(TRUE)
+
+main_font <- "Font"
+
+bg <- "#121212"
+section_bg <- "#3D3D3D"
+txt_color <- "#ff1515"
+txt_color1 <- "#cccccc"
+txt_color2 <- "#3D3D3D"
+color1 <- "#00B333"
+color2 <- "#ff1515"
+
+
+title_text <- "Stranger Things: it gets darker down the road"
+sub_text <- "A sentiment analaysis of words in dialogues"
+cap_text <- "Wai Leung | Twitter: @to_waiting_room | Data: 8flix.com"
+
+season_sen_mod %>% 
+  ggplot(aes(episode, sentiment)) + 
+  geom_line() + 
+  geom_hline(yintercept = 0, color = "white", size = 0.2) +
+  # aesthetic
+  
+  # To allow different colors for positive and negative values, with no legend
+  geom_link2(aes(color = after_stat(ifelse(y > 0, "1. positive", "2. negative"))), show.legend = TRUE, size = 1) + 
+  scale_color_manual(values = c(color1, color2)) + 
+  
+  # Basic aes
+  theme(plot.background = element_rect(fill = bg), 
+        panel.background = element_rect(fill = "transparent"), 
+        panel.grid = element_blank(), 
+        strip.background = element_rect(fill = "transparent"), 
+        plot.margin = margin(10, 20, 10, 20), 
+        
+  # text
+        text = element_text(color = txt_color1, 
+                            family = main_font, 
+                            size = 10, 
+                            ),
+        plot.title = element_text(size = 20, 
+                                  face = "bold", 
+                                  margin = (margin(5, 0, 5, 0)), 
+                                  color = txt_color), 
+        plot.subtitle = element_text(size = 18, 
+                                     margin = margin(0, 0, 0, 5)), 
+        plot.caption = element_text(size = 10, 
+                                    hjust = .5, 
+                                    color = txt_color2), 
+        strip.text = element_text(color = txt_color1, 
+                                  family = main_font, 
+                                  size = 15), 
+        legend.text = element_text(size = 15, 
+                                   color = txt_color1), 
+        legend.title = element_text(size = 15), 
+  # legend
+        legend.background = element_rect("transparent"), 
+        legend.position = "top", 
+        legend.justification = "left", 
+        legend.key = element_rect(fill = "transparent", 
+                                  color = NA, 
+                                  ), 
+        legend.margin = margin(0, 0, 0, 0), 
+        
+  # Axis
+        axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        axis.title.y = element_blank(), 
+        axis.title = element_text(color = txt_color1, 
+                                  size = 15)
+        ) + 
+  # Annotations
+  labs(title = title_text, 
+       subtitle = sub_text, 
+       x = "Season Start To Season Final", 
+       y = "", 
+       caption = cap_text, 
+  # for legend title
+       color = "Sentiment: ") + 
+  # split graphs
+  facet_wrap( ~ season)
+
+```
+```{r}
+# Print plot
+showtext_opts(dpi = 320)
+ggsave("2022Week42_StrangerThings.png", height = 6, 
+      width = 8, 
+      dpi = 320)
+```
+
