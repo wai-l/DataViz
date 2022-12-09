@@ -1,0 +1,187 @@
+---
+title: "Tidy Tuesday 2022 Week 48 world cup"
+author: "Wai"
+date: "2022-12-05"
+output: html_document
+---
+
+```{r}
+# Environment set up and loading data set
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(tidytuesdayR)
+library(sysfonts)
+library(ggforce)
+library(forcats)
+library(showtext)
+
+world_cup <- tidytuesdayR::tt_load(2022, week = 48)
+wcmatches <- world_cup$wcmatches
+```
+
+```{r}
+# Data overview
+glimpse(wcmatches)
+View(wcmatches)
+str(wcmatches)
+summary(wcmatches)
+head(wcmatches)
+```
+```{r}
+# Data cleaning and manipulation 
+# Focus on england team
+Eng_wc_matches <- wcmatches %>% 
+  filter(home_team == "England" | away_team == "England")
+
+summary(Eng_wc_matches)
+
+nrow(Eng_wc_matches)
+# total 69 matches from 1950 to 2018
+
+Eng_wc_matches %>% 
+  count(winning_team == "England")
+# 69 matches with 30 wins, 22 lose and 17 N/a
+
+# check if NA in winning teams are tie games: yes, 17 rows returned with tied scores
+tied_game <- Eng_wc_matches[is.na(Eng_wc_matches$winning_team), ]
+sum(tied_game$home_score == tied_game$away_score)
+sum(tied_game$outcome == "D")
+
+# restructure the dataframe: add a column for 1. England (home and away), 2. Opponent, 3. England Result (Won, Lost, Drawn)
+Eng_wc_record <- Eng_wc_matches %>% 
+  select(stage, home_team, away_team, home_score, away_score, outcome, winning_team, losing_team, win_conditions)
+
+Eng_wc_record$Opponent <- 
+  ifelse(Eng_wc_matches$home_team == "England", 
+         paste(Eng_wc_matches$away_team), 
+         paste(Eng_wc_matches$home_team))
+
+Eng_wc_record$England <- 
+  paste("England")
+
+Eng_wc_record$result <-
+  ifelse(Eng_wc_record$winning_team == "England", 
+         "Won", 
+         ifelse(Eng_wc_record$losing_team == "England", 
+                "Lost", 
+                ifelse(!is.na(Eng_wc_record$winning_team), 
+                       "Drawn", 
+                       "Error")))
+
+Eng_wc_record <- Eng_wc_record %>% 
+  mutate(result = case_when(
+    winning_team == "England" ~ "Won", 
+    losing_team == "England" ~ "Lost", 
+    is.na(winning_team) ~ "Drawn"
+  ))
+
+# check code
+Eng_wc_record %>% 
+  count(result)
+
+Eng_wc_record %>% 
+  filter(is.na(winning_team) & result == "Drawn")
+
+# Clean data
+Eng_wc_record_clean <- Eng_wc_record %>% 
+  select(England, Opponent, result, win_conditions)
+
+Eng_wc_record_clean
+
+# 2022 World Cup Quarter-final teams
+QF <- c("Croatia", "Brazil", "Netherlands", "Argentina", "Morocco", "Portugal", "France")
+```
+```{r}
+# Plot
+# Text and Theme
+font_add_google("Roboto Slab", "Font")
+
+main_font <- "Font"
+# Light Grey
+bg <- "#F2F2F2"
+showtext_auto(TRUE)
+# England Blue
+txt_color <- "#2B57AC"
+# Loss, Draw, Won
+fill_color <- c("#EA1F29", "#2B57AC", "#009E28")
+
+title_text <- "England VS 2022 Quarter Finals Teams"
+sub_text <- "1950 - 2018 World Cup Match Records"
+cap_text <- "Wai Leung | Twitter: @wt_room | Data: FIFA World Cup"
+
+
+# Plot
+
+Eng_wc_record_clean %>% 
+  filter(Opponent %in% QF) %>% 
+  ggplot() + 
+  #fct is to sort y axis by count of Opponent
+  geom_bar(aes(y = fct_rev(fct_infreq(Opponent)), fill = factor(result, levels = c("Lost", "Drawn", "Won")))) + 
+  # reverse legend order but not the actual plot
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  
+  # collapse the gap between panel and axis label
+  scale_x_continuous(limits = c(0, 5), expand = c(0, 0)) + 
+  # Basic aes
+  scale_fill_manual(values = fill_color) + 
+  theme(plot.background = element_rect(fill = bg), 
+        panel.background = element_rect(fill = "transparent"), 
+        panel.grid = element_blank(), 
+        panel.border = element_blank(), 
+        plot.margin = margin(10, 20, 10, 20), 
+        
+        
+        
+  # text        
+        text = element_text(color = txt_color, 
+                            family = main_font, 
+                            size = 10), 
+        plot.title = element_text(size = 20, 
+                                  face = "bold", 
+                                  margin = (margin(5, 0, 5, 0)), 
+                                  color = txt_color),
+        plot.title.position = "plot", 
+        plot.subtitle = element_text(size = 20, 
+                                     margin = margin(0, 0, 0, 5)), 
+        plot.caption = element_text(size = 10, 
+                                    margin = margin(5, 0, 5, 0), 
+                                    color = txt_color), 
+        plot.caption.position = "plot", 
+        legend.text = element_text(size = 12, 
+                                 color = txt_color), 
+  # legend
+        legend.background = element_rect("transparent"), 
+        legend.position = "top", 
+        legend.justification = "right", 
+        legend.title = element_blank(), 
+        legend.box.margin = margin(0, 0, -10, 0), 
+  # Axis
+        axis.title.y = element_blank(), 
+        axis.title.x = element_text(color = txt_color, 
+                                    size = 12, 
+                                    margin = margin(10, 0, 5, 0)), 
+        
+        axis.text = element_text(color = txt_color, 
+                                   size = 12), 
+        axis.ticks = element_blank()
+        
+        ) + 
+        
+  # Annotations
+  labs(title = title_text, 
+       subtitle = sub_text, 
+       x = "Number Of Match", 
+       caption = cap_text
+        )
+
+```
+```{r}
+# Print plot
+showtext_opts(dpi = 320)
+ggsave("2022Week48_WorldCup.png", 
+       height = 6, 
+       width = 6, 
+       dpi = 320)
+```
+
