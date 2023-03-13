@@ -1,0 +1,133 @@
+---
+title: "202303_FourDaysWorkWeek"
+author: "Wai"
+date: "2023-03-06"
+output: html_document
+---
+
+# To do: 
+1. change legend text
+2. put a class to the outcome
+2. move legend around?
+3. color experiment
+4. size changing
+
+# Packages
+
+```{r}
+# devtools::install_github("liamgilbey/ggwaffle")
+library(dplyr)
+library(ggplot2)
+library(devtools)
+library(ggwaffle)
+
+library(sysfonts)
+library(showtext)
+```
+
+# Writing the dataset
+```{r}
+# Create a data frame with participant IDs
+FourDayWeek <- data.frame(ID = 1:61)
+
+Outcome <- rep(c("Continuing 4-day work week", "Continuing and permanent policy ", "Still in trail or paused 4-day week"), c(38, 18, 5))
+
+FourDayWeek <- FourDayWeek %>% 
+  mutate(Outcome = Outcome)
+
+View(FourDayWeek)
+```
+
+# Adhoc
+```{r}
+# FourDayWeek %>% 
+#   ggplot() + 
+#   geom_bar(aes(x = Outcome))
+# 
+# file.remove("/Users/RoyLeung/Library/R/arm64/4.2/library/ggplot2/help/ggplot2.rdb")
+# 
+# install.packages("ggplot2")
+```
+# Waffle 
+# Rotate the graph by swapping the x and y mapping from waffle iron, and put x into desc
+```{r}
+# Text and theme
+font_add_google("Roboto Slab", "Font")
+main_font <- "Font"
+showtext_auto(TRUE)
+bg <- "#171C26"
+txt_color <- "#F2F2F2"
+# fill_color <- c("#FFF387", "#FFEB3B", "#CCBC2F")
+fill_color <- c("#FFF9B4", "#FFE900", "#A77B1D")
+
+title_text <- "Successful result from UK's 4-day work week pilot"
+sub_text <- "56 out of 61 participated companies are keeping the policy"
+cap_text <- "@brit.viz | Data: autonomy.work"
+lab_title <- "Participants' future plan"
+lab_text <- c("Continuing 4-day work week", "Continuing as permanent policy ", "Still in pilot program OR paused")
+# leg_text
+
+
+# Waffle main part
+FourDayWeek_Waffle <- waffle_iron(FourDayWeek, aes_d(group = Outcome))
+ggplot(FourDayWeek_Waffle, 
+       aes(y, desc(x), 
+           fill = Outcome, 
+           ), 
+       
+       ) + 
+  geom_waffle(
+    color = bg, 
+    ) + 
+  coord_equal() +
+  scale_fill_manual(values = fill_color, 
+                    labels = lab_text) +
+  # scale_fill_waffle() + 
+  theme_waffle() + 
+  
+  # aes: color
+  theme(
+    plot.background = element_rect(fill = bg), 
+    legend.background = element_blank(), 
+    legend.key = element_blank(), 
+    
+    # aes: text
+    text = element_text(color = txt_color, 
+                        family = main_font, 
+                        size = 45), 
+    plot.title = element_text(size = 55, 
+                              face = "bold", 
+                              margin = margin(10, 0, 5, 0)
+                              ), 
+    plot.subtitle = element_text(size = 50, 
+                                 margin = margin(0, 0, 5, 0)), 
+    legend.margin = margin(0, 0, 2, 0), 
+    legend.title = element_text(margin = margin(0, 0, -20, 0)), 
+    legend.text = element_text(margin = margin(l = -10)), 
+    axis.title.x = element_blank(), 
+    axis.title.y = element_blank(), 
+    plot.title.position = "plot", 
+    
+    plot.caption.position = "plot", 
+    # legend.title = element_blank(), 
+    legend.position = "right", 
+    
+    # legend.direction = "vertical",
+    
+  ) + 
+  # text
+  labs(title = title_text, 
+       subtitle = sub_text, 
+       caption = cap_text, 
+       fill = lab_title)
+```
+# Print
+```{r}
+# showtext_opts(dpi = 320)
+ggsave("four_day_week.png", 
+       height = 6, 
+       width = 6, 
+       dpi = 320
+       ) 
+```
+
