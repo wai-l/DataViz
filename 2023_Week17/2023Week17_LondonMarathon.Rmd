@@ -1,0 +1,286 @@
+---
+title: "202305_TTWeek17_LondonMarathon"
+author: "Wai"
+date: "2023-05-11"
+output: html_document
+---
+
+# Packages
+
+```{r}
+# install.packages("tidytuesdayR")
+# install.packages("tidyverse")
+
+library(tidytuesdayR)
+library(dplyr)
+library(tidyverse)
+library(hms)
+library(ggplot2)
+library(patchwork)
+library(sysfonts)
+library(showtext)
+
+```
+
+# Dataset
+
+```{r}
+tuesdata <- tidytuesdayR::tt_load(2023, week = 17)
+winners <- tuesdata$winners
+london_marathon <- tuesdata$london_marathon
+```
+# Import updated data
+```{r}
+winners2 <- data.frame(
+  Category = c("Wheelchair Men", "Wheelchair Women", "Men", "Women", "Wheelchair Men", "Wheelchair Women"), 
+  Year = c(2022, 2022, 2023, 2023, 2023, 2023), 
+  Athlete = c("Marcel Hug", "Catherine Debrunner", "Kelvin Kiptum", "Sifan Hassan", "Marcel Hug", "Madison de Rozario"), 
+  Nationality = c("Switzerland", "Switzerland", "Kenya", "Netherlands", "Switzerland", "Australia"), 
+  Time = as_hms(c("01:24:38", "01:38:24", "02:01:25", "02:18:33", "01:23:44", "01:38:51"))
+)
+
+winners_updated <- rbind(winners, winners2)
+
+colnames(london_marathon)[colnames(london_marathon) == "Official charity"] <- "Charity"
+
+head(london_marathon)
+
+lm2 <- data.frame(
+  Date = as_date("2023-04-23"), 
+  Year = 2023, 
+  Applicants = NA, 
+  Accepted = 49675, 
+  Starters = 49272, 
+  Finishers = 43965, 
+  Raised = NA, 
+  Charity = "Samaritans"
+)
+
+lm2
+
+lm_updated <- rbind(london_marathon, lm2)
+
+lm_updated %>% 
+  arrange(desc(Year))
+
+```
+
+
+# Exploreing the dataset
+```{r}
+winners %>% 
+  arrange(desc(Year)) %>% 
+  head()
+
+
+london_marathon %>% 
+  arrange(desc(Year)) %>% 
+  head()
+
+winners %>% 
+  filter(Year == 2022)
+
+lm_updated <- lm_updated %>% 
+  mutate(NonFinishers = Starters - Finishers)
+
+
+lm_cleaned <- lm_updated %>% 
+  gather(key = "Type", value = "Number", NonFinishers, Finishers, Starters, Accepted, Applicants) %>% 
+  arrange(Year) %>% 
+  select(Date, Year, Type, Number)
+
+lm_cleaned
+
+
+```
+
+# Plots
+```{r}
+# Text and theme
+font_add_google("Roboto Slab", "Font")
+main_font <- "Font"
+showtext_auto(TRUE)
+
+main_title <- "40 Years of London Marathon: \nAre we running quicker? "
+title_win <- "Winners' Finishing Time"
+sub_title_win <- "Men & Women"
+sub_title_wheel <- "Wheelchair Men & Women"
+title_finish <- "Number Of Finishers"
+note <- "* 2020 data only shows non-virtual elite runners (66 finishers); 2021 & 2022 data unavailable"
+cap_txt <- "@brit.viz | Data: London Marathon"
+
+bg_c <- "#F2F2F2"
+# bg_c <- "#E0AC10"
+txt_c <- "#121212"
+sub_c <- "#D2D2D2"
+men_c <- "#16E0AE"
+women_c <- "#CB00E0"
+finish_c <- "#E0AC10"
+# finish_c <- "#001C99"
+
+
+
+# Winners
+win_plot <-
+  winners_updated %>% 
+  filter(Category %in% c("Men", "Women")) %>% 
+    ggplot() + 
+    geom_line(aes(x = Year, y = Time, color = Category), 
+              size = 1) + 
+    theme_minimal() + 
+    # color
+    scale_color_manual(values = c(men_c, women_c)) + 
+    theme(
+      plot.background = element_rect(fill = bg_c, 
+                                     color = bg_c), 
+      panel.background = element_blank(), 
+      panel.grid = element_line(color = sub_c),
+      # text
+      text = element_text(color = txt_c, 
+                          family = main_font, 
+                          size = 10), 
+      plot.title = element_text(size = 20, 
+                                face = "bold", 
+                                margin = margin(t = 10, b = 5)), 
+      plot.title.position = "plot", 
+      axis.title = element_blank(), 
+      axis.text = element_text(color = txt_c, 
+                               family = main_font, 
+                               size = 10), 
+      # legend.title = element_text(size = 15), 
+      legend.text = element_text(size = 15), 
+      # plot.caption = element_text(size = 15, 
+      #                             margin = margin(t = 5, b = 5)), 
+      # others
+      legend.position = "top", 
+      legend.justification = "left", 
+      legend.title = element_blank()
+      ) + 
+    labs(title = title_win
+         
+         )
+
+
+    
+```
+
+
+```{r}
+# Wheel
+wheel_plot <-
+  winners_updated %>%
+  filter(!Category %in% c("Men", "Women")) %>% 
+    ggplot() + 
+    geom_line(aes(x = Year, y = Time, color = Category), 
+              size = 1) + 
+    theme_minimal() + 
+      # color
+    scale_color_manual(values = c(men_c, women_c)) + 
+    theme(
+      plot.background = element_rect(fill = bg_c, 
+                                     color = bg_c), 
+      panel.background = element_blank(), 
+      panel.grid = element_line(color = sub_c),
+      # text
+      text = element_text(color = txt_c, 
+                          family = main_font, 
+                          size = 10), 
+      plot.title = element_text(size = 20, 
+                                face = "bold"), 
+      plot.title.position = "plot", 
+      axis.title = element_blank(), 
+      axis.text = element_text(color = txt_c, 
+                               family = main_font, 
+                               size = 10), 
+      plot.caption = element_text(size = 15, 
+                                  margin = margin(t = 10, b = 5)), 
+      # legend.title = element_text(size = 15), 
+      legend.text = element_text(size = 15), 
+      # others
+      legend.position = "top", 
+      legend.justification = "left", 
+      legend.title = element_blank()
+      ) + 
+    coord_cartesian(xlim = c(1981, 2023))
+```
+
+
+```{r}
+# Finishers
+
+finish_plot <-
+  lm_cleaned %>% 
+    filter(!Type %in% c("Applicants", "Accepted", "Starters", "NonFinishers")) %>% 
+      ggplot() + 
+      geom_col(aes(x = Year, y = Number, fill = Type), 
+               fill = finish_c) + 
+      theme_minimal() + 
+      theme(
+        legend.position = "none", 
+        # color
+        plot.background = element_rect(fill = bg_c, 
+                                       color = bg_c), 
+        panel.background = element_blank(), 
+        panel.grid = element_line(color = sub_c), 
+        # text
+        text = element_text(color = txt_c, 
+                          family = main_font, 
+                          size = 10), 
+        plot.title = element_text(size = 20, 
+                                  face = "bold"), 
+        plot.title.position = "plot", 
+        plot.subtitle = element_text(color = ), 
+        axis.title = element_blank(), 
+        axis.text = element_text(color = txt_c, 
+                                 family = main_font, 
+                                 size = 10), 
+        plot.caption = element_text(size = 15, 
+                                    margin = margin(t = 10)), 
+        
+      ) + 
+    labs(title = title_finish, 
+         subtitle = note, 
+         caption = cap_txt) + 
+    coord_cartesian(xlim = c(1981, 2023))
+
+```
+
+
+
+# Patchwork
+```{r}
+patchwork <- 
+  win_plot / wheel_plot / finish_plot
+
+patchwork + plot_annotation(
+  title = main_title, 
+  theme = theme(plot.background = element_rect(color = bg_c, 
+                                               fill = bg_c), 
+                plot.margin = margin(t = 10, r = 5, b = 10, l = 5))
+  &
+    theme(
+      text = element_text(family = main_font, 
+                          color = txt_c, 
+                          face = "bold", 
+                          size = 25 
+                          ), 
+      title = element_text(margin = margin(t = 50, b = 5)), 
+      
+    )
+)
+
+
+
+```
+
+# Save
+```{r}
+showtext_opts(dpi = 320)
+ggsave("202305_LondonMarathon.png", 
+       height = 8, 
+       width = 8, 
+       dpi = 320)
+```
+
+
+
