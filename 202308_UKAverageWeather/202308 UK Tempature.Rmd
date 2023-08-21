@@ -1,0 +1,391 @@
+---
+title: "202308_UK Tempature"
+author: "Wai"
+date: "2023-08-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# install.packages("hrbrthemes")
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+library(sysfonts)
+library(showtext)
+```
+
+# Read Data
+```{r}
+AverageTemp <- read.csv("UKAverageTempatureByMonth_1991-2023.csv")
+
+AverageRainfall <- read.csv("UKAverageRainfallByMonth_1991-2023.csv")
+
+AverageDailySunHour <- read.csv("UKAverageDailySunHourByMonth_1991-2023.csv")
+
+head(AverageTemp)
+
+head(AverageRainfall)
+
+head(AverageDailySunHour)
+
+```
+
+# Pivot Data
+```{r}
+
+# Temp
+AverageTemp <- 
+  AverageTemp %>% 
+  rename(Year = Calendarperiod)
+  
+AverageTemp <- 
+  gather(AverageTemp, Month, Temp_C, January:December, factor_key = TRUE)
+
+AverageTemp <- 
+  AverageTemp %>% 
+  mutate(YearMonth = paste(Year, " ", Month))
+
+AverageTemp
+
+# Rainfall
+AverageRainfall <- 
+  AverageRainfall %>% 
+  rename(Year = Calendar.period)
+
+AverageRainfall <- 
+  gather(AverageRainfall, Month, rainfall_mm, January:December, factor_key = TRUE)
+
+AverageRainfall <- 
+  AverageRainfall %>% 
+  mutate(YearMonth = paste(Year, " ", Month))
+
+AverageRainfall
+
+# Sun Hours
+AverageDailySunHour <- 
+  AverageDailySunHour %>% 
+  rename(Year = Calendar.period)
+
+AverageDailySunHour <- 
+  gather(AverageDailySunHour, Month, SunHour, January:December, factor_key = TRUE)
+
+AverageDailySunHour <- 
+  AverageDailySunHour %>% 
+  mutate(YearMonth = paste(Year, " ", Month))
+
+AverageDailySunHour
+
+
+# combine tables
+df_list <- list(AverageDailySunHour, AverageRainfall, AverageTemp)
+
+AverageWeather <- 
+  df_list %>% 
+  reduce(full_join, by="YearMonth") %>% 
+  select(Year, Month, YearMonth, Temp_C, SunHour, rainfall_mm)
+  
+AverageWeather <- 
+  AverageWeather %>% 
+  # filter(Year >= 2001 & (!is.na(Temp_C)|!is.na(SunHour)|!is.na(rainfall_mm))) %>% 
+# add adhoc 2023 July Weather
+  add_row(Year = 2023, Month = "July", YearMonth = "2023 July", Temp_C = 14.9, rainfall_mm = 140.1, SunHour = 140.3/31) %>% 
+  arrange(Year) 
+
+  # mutate(Temp_C_Gp = 
+  #          cut(Temp_C, 
+  #              breaks = c(-10, 0, 5, 10, 15, 30), 
+  #              labels = c("<0", "0-5", "5-10", "10-15", ">15")))
+
+# mean cal
+mean(AverageWeather$Temp_C)
+mean(AverageTemp$Temp_C, na.rm = TRUE)
+
+mean(AverageWeather$SunHour)
+mean(AverageDailySunHour$SunHour, na.rm = TRUE)
+
+mean(AverageWeather$rainfall_mm)
+mean(AverageRainfall$rainfall_mm, na.rm = TRUE)
+
+AverageWeather
+
+factor(AverageWeather$Month) %>% 
+  unique()
+
+
+
+```
+
+
+# Plot
+```{r fig.asp = 1}
+# knitr::opts_chunk$set(echo = TRUE, width = 20, height = 10)
+
+# use mean as mid point
+# mean_Temp_C <- mean(AverageWeather$Temp_C)
+# mean_SunHour <- mean(AverageWeather$SunHour)
+# mean_rainfall_mm <- mean(AverageWeather$rainfall_mm)
+# 
+# mean(AverageWeather$Temp_C)
+# 
+# (19.3+0.3)/2
+
+# mid point
+
+mid_temp = (max(AverageWeather$Temp_C, na.rm = TRUE) + min(AverageWeather$Temp_C, na.rm = TRUE))/2
+
+# text and theme
+font_add_google("Roboto", "Font")
+font_add_google("Roboto Mono", "B_Font")
+big_font <- "B_Font"
+main_font <- "Font"
+showtext_auto(TRUE)
+
+main_title <- "UK Average Temperature 1991 - 2003"
+july_title <- "UK Average Temperature \nJuly 1991 - 2003"
+ju_title <- "UK Average Temperature \nJune - July, 1991 - 2003"
+cap_txt <- "@brit.viz | Data: Department for Energy Security & Net Zero, Met Office"
+
+
+# Temp <- 
+Temp_Plot <-
+  AverageWeather %>% 
+  ggplot() + 
+  geom_tile(aes(x = Year, y = Month, fill = Temp_C)) + 
+  coord_equal() + 
+    # scale_fill_manual(values = c("#242ACF", "#008ef9", "#49abfe", "#ec59cd", "#FF0602")) + 
+  scale_fill_gradient2(high = "#FF0602", low = "#242ACF", mid = "#07C8F9", midpoint = mid_temp, na.value = "transparent") +
+  scale_y_discrete(limits = rev(levels(AverageTemp$Month)), 
+                   breaks = c("January", "April", "July", "October"), 
+                   labels = c("Jan", "Apr", "Jul", "Oct")) +  # Reversing display order
+    scale_x_continuous(breaks = c(1991, 1996, 2001, 2006, 2011, 2016, 2021), 
+                       # this will remove margin of the panel
+                       expand= c(0, 0)) + 
+    labs(x = "", y = "", fill = "Temperature \n(°C)", 
+         title = main_title, 
+         caption = cap_txt) + 
+    # guides(fill = guide_legend(title.position = "top", label.position = "bottom")) + 
+  # scale_y_reverse() +
+  theme_grey(base_size = 13*4, 
+             base_family = main_font, 
+             ) + 
+    theme(
+      legend.position = "bottom", 
+      legend.justification = "left", 
+      legend.key.height = unit(5, "mm"), 
+      legend.key.width = unit(18, "mm"), 
+      legend.margin = margin(-20*4, 10, 0, 0), 
+      legend.title = element_text(size = 10 * 4, 
+                                  color = "grey10", 
+                                  face = "bold", 
+                                  lineheight = 0.3, 
+                                  margin = margin(t = -0.55, r = -0.5, unit = "cm")), 
+      legend.text = element_text(size = 10 * 4, 
+                                 color = "grey10", 
+                                 margin = margin(t = -0.5, unit = "cm")
+                                 ), 
+      
+      axis.text = element_text(color = "grey10", 
+                               ), 
+      axis.text.x = element_text(margin = margin(t = 0.1, unit = "cm")), 
+      axis.text.y = element_text(margin = margin(r = 0, l = -1, unit = "cm")), 
+      axis.ticks = element_line(linewidth = 0.5), 
+      axis.ticks.length = unit(.2, "cm"), 
+      
+      panel.grid = element_blank(),
+      panel.background = element_blank(),
+      
+      plot.title.position = "plot", 
+      plot.caption.position = "plot", 
+      
+      plot.title = element_text(family = big_font, 
+                                face = "bold", 
+                                size = 20*4, 
+                                margin = margin(b = 1, l = 20)), 
+      plot.caption = element_text(size = 10*4, 
+                                  margin = margin(10, 0, 0, 0)), 
+      
+      plot.margin = margin(0, 20, 0, 5), 
+      
+      
+    )
+
+  
+JulyPlot <-
+  AverageWeather %>%
+  filter(Month == "July") %>%
+  ggplot() +
+  geom_tile(aes(x = Year, y = Month, fill = Temp_C)) +
+  coord_equal() + 
+    # scale_fill_manual(values = c("#242ACF", "#008ef9", "#49abfe", "#ec59cd", "#FF0602")) + 
+  scale_fill_gradient2(high = "#FF0602", low = "#242ACF", mid = "#07C8F9", midpoint = mid_temp, na.value = "transparent") +
+  # scale_y_discrete(limits = rev(levels(AverageTemp$Month)), 
+  #                  breaks = c("January", "April", "July", "October"), 
+  #                  labels = c("Jan", "Apr", "Jul", "Oct")) +  # Reversing display order
+    scale_x_continuous(breaks = c(1991, 1996, 2001, 2006, 2011, 2016, 2021), 
+                       # this will remove margin of the panel
+                       expand= c(0, 0)) + 
+    labs(x = "", y = "", 
+         title = july_title, 
+         caption = cap_txt) + 
+    # guides(fill = guide_legend(title.position = "top", label.position = "bottom")) + 
+  # scale_y_reverse() +
+  theme_grey(base_size = 13*4, 
+             base_family = main_font, 
+             ) + 
+    theme(
+      legend.position = "none", 
+      # legend.position = "bottom", 
+      # legend.justification = "left", 
+      # legend.key.height = unit(5, "mm"), 
+      # legend.key.width = unit(18, "mm"), 
+      # legend.margin = margin(-20*4, 10, 0, 0), 
+      # legend.title = element_text(size = 10 * 4, 
+      #                             color = "grey10", 
+      #                             face = "bold", 
+      #                             lineheight = 0.3, 
+      #                             margin = margin(t = -0.55, r = -0.5, unit = "cm")), 
+      # legend.text = element_text(size = 10 * 4, 
+      #                            color = "grey10", 
+      #                            margin = margin(t = -0.5, unit = "cm")
+      #                            ), 
+      
+      axis.text = element_text(color = "grey10", 
+                               ), 
+      axis.text.x = element_text(margin = margin(t = 0.1, unit = "cm")), 
+      axis.text.y = element_blank(), 
+      axis.ticks.y = element_blank(), 
+      # axis.text.y = element_text(margin = margin(r = 0, l = -1, unit = "cm")), 
+      axis.ticks = element_line(linewidth = 0.5), 
+      axis.ticks.length = unit(.2, "cm"), 
+      
+      panel.grid = element_blank(),
+      panel.background = element_blank(),
+      
+      plot.title.position = "plot", 
+      plot.caption.position = "plot", 
+      
+      plot.title = element_text(family = big_font, 
+                                face = "bold", 
+                                size = 20*4, 
+                                lineheight = 0.25, 
+                                margin = margin(b = 1, l = 20)), 
+      plot.caption = element_text(size = 10*4, 
+                                  lineheight = 0.25,
+                                  margin = margin(0, 0, 0, 0)), 
+      
+      plot.margin = margin(0, 20, 0, 5), 
+      
+      
+      
+    )
+
+
+
+  
+JuPlot <-
+  AverageWeather %>%
+  filter(Month == "July" | Month == "June") %>%
+  ggplot() +
+  geom_tile(aes(x = Year, y = Month, fill = Temp_C)) +
+  coord_equal() + 
+    # scale_fill_manual(values = c("#242ACF", "#008ef9", "#49abfe", "#ec59cd", "#FF0602")) + 
+  scale_fill_gradient2(high = "#FF0602", low = "#242ACF", mid = "#07C8F9", midpoint = mid_temp, na.value = "transparent") +
+  scale_y_discrete(limits = rev(c("June", "July")), 
+                   # breaks = c("June", "July"), 
+                   labels = c("Jun", "Jul"), 
+                   # expand = c(0, 0)
+                   # breaks = c("January", "April", "July", "October"),
+                   # labels = c("Jan", "Apr", "Jul", "Oct")
+                   ) +  # Reversing display order
+    scale_x_continuous(breaks = c(1991, 1996, 2001, 2006, 2011, 2016, 2021), 
+                       # this will remove margin of the panel
+                       expand= c(0, 0)) + 
+    labs(x = "", y = "", 
+         title = ju_title, 
+         caption = cap_txt) + 
+    # guides(fill = guide_legend(title.position = "top", label.position = "bottom")) + 
+  # scale_y_reverse() +
+  theme_grey(base_size = 13*4, 
+             base_family = main_font, 
+             ) + 
+    theme(
+      legend.position = "none", 
+      # legend.position = "bottom", 
+      # legend.justification = "left", 
+      # legend.key.height = unit(5, "mm"), 
+      # legend.key.width = unit(18, "mm"), 
+      # legend.margin = margin(-20*4, 10, 0, 0), 
+      # legend.title = element_text(size = 10 * 4, 
+      #                             color = "grey10", 
+      #                             face = "bold", 
+      #                             lineheight = 0.3, 
+      #                             margin = margin(t = -0.55, r = -0.5, unit = "cm")), 
+      # legend.text = element_text(size = 10 * 4, 
+      #                            color = "grey10", 
+      #                            margin = margin(t = -0.5, unit = "cm")
+      #                            ), 
+      
+      axis.text = element_text(color = "grey10", 
+                               ), 
+      axis.text.x = element_text(margin = margin(t = 0.1, unit = "cm")), 
+      # axis.text.y = element_blank(), 
+      # axis.ticks.y = element_blank(), 
+      axis.text.y = element_text(margin = margin(r = 0, l = -1, unit = "cm")),
+      axis.ticks = element_line(linewidth = 0.5), 
+      axis.ticks.length = unit(.2, "cm"), 
+      
+      panel.grid = element_blank(),
+      panel.background = element_blank(),
+      
+      plot.title.position = "plot", 
+      plot.caption.position = "plot", 
+      
+      plot.title = element_text(family = big_font, 
+                                face = "bold", 
+                                size = 20*4, 
+                                lineheight = 0.25, 
+                                margin = margin(b = 1, l = 20)), 
+      plot.caption = element_text(size = 10*4, 
+                                  lineheight = 0.25,
+                                  margin = margin(0, 0, 0, 0)), 
+      
+      plot.margin = margin(0, 20, 0, 5), 
+      
+      
+      
+    )
+
+
+
+
+```
+
+
+
+# Output
+```{r}
+
+
+ggsave(Temp_Plot, filename="YearTempPlot.png", height=20, width=20, 
+       unit = "cm", 
+       dpi = 320)
+
+ggsave(JulyPlot, filename="JulyTempPlot.png", height=20, width=20, 
+       unit = "cm", 
+       dpi = 320)
+
+ggsave(JuPlot, filename="JuTempPlot.png", height=20, width=20, 
+       unit = "cm", 
+       dpi = 320)
+
+```
+
+# adhoc
+```{r}
+AverageWeather %>% 
+  filter(Month == "June") %>% 
+  arrange(desc(Temp_C))
+```
+
