@@ -1,0 +1,348 @@
+---
+title: "Untitled"
+author: "Wai"
+date: "2023-08-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
+library(readxl)
+library(plotly)
+library(RColorBrewer)
+library(showtext)
+library(sysfonts)
+```
+
+# Read data
+```{r}
+BoyNames <- read_excel("babynames1996to2021.xlsx", sheet = "1", skip = 7)
+GirlNames <- read_excel("babynames1996to2021.xlsx", sheet = "2", skip = 7)
+
+BoyNames
+GirlNames
+```
+# Data Cleaning
+```{r}
+# add column for boys / girl, then combine the tables
+BoyNames <- BoyNames %>% 
+  mutate(Gender = "Boys")
+
+GirlNames <- GirlNames %>% 
+  mutate(Gender = "Girls")
+
+
+combined_baby_name <- rbind(BoyNames, GirlNames)
+
+# Quick check
+nrow(BoyNames) + nrow(GirlNames) == nrow(combined_baby_name)
+
+# replace [x] with na and turn to number
+
+combined_baby_name[2:53][combined_baby_name[2:53] =="[x]"] <- NA
+
+combined_baby_name <- combined_baby_name %>% 
+  mutate_at(2:53, 
+            as.numeric)
+
+# Turn Rank, Count, Year into separate columns
+combined_rank <- 
+  combined_baby_name %>% 
+  select(Name, Gender, matches("Rank")) %>% 
+  gather(., key = "Year Rank", value = "Rank", 3:28)
+
+combined_count <- 
+  combined_baby_name %>% 
+  select(Name, Gender, matches("Count")) %>% 
+  gather(., key = "Year Count", value = "Count", 3:28)
+
+combined_rank <- 
+  combined_rank %>% 
+  mutate(Year = gsub(" Rank", "", `Year Rank`), 
+         Year = as.numeric(Year)) %>% 
+  select(Name, Gender, Year, Rank)
+
+combined_count <- 
+  combined_count %>% 
+  mutate(Year = gsub(" Count", "", `Year Count`), 
+         Year = as.numeric(Year)) %>% 
+  select(Name, Gender, Year, Count)
+
+
+
+
+combined_name_clean <- 
+  combined_baby_name %>% 
+  gather(., key = "Year Rank", value = "Rank", matches("Rank")) %>% 
+  gather(., "Year Count", value = "Count", matches("Count")) %>% 
+  mutate(Year = gsub(" Rank", "", `Year Rank`), 
+         Year2 = gsub(" Count", "", `Year Count`), 
+         Year = as.numeric(Year), 
+         Year2 = as.numeric(Year2))
+
+combined_name_clean <- 
+  combined_name_clean %>% 
+  filter(Year == Year2) %>% 
+  select(Name, Gender, Year, Rank, Count)
+
+combined_name_clean
+
+
+
+```
+
+```{r fig.asp = 1}
+knitr::opts_chunk$set(echo = TRUE, repr.plot.width = 20, repr.plot.height = 20)
+# knitr::opts_chunk$set(fig.asp = 1)
+
+# All time top 5 is now actually top 5 from 2021 & 1996
+
+
+AllTimeTop5 <-
+  combined_name_clean %>% 
+  # filter(Rank <= 5) %>% 
+  filter((Rank <= 3 & Year == 1996)|(Rank <= 3 & Year == 2021)) %>% 
+  select(Name, Gender) %>% 
+  mutate(Name_Gender = paste(Name, Gender), 
+         Top5 = Name) %>% 
+    unique()
+
+combined_name_2 <- 
+  combined_name_clean %>% 
+  mutate(Name_Gender = paste(Name, Gender))
+
+Top_rank_change <- 
+left_join(combined_name_2, AllTimeTop5, "Name_Gender") %>% 
+  mutate(Top5 = ifelse(is.na(Top5), "ZZZZZ", Top5))
+
+Top_rank_change
+
+# Plot
+showtext_opts(dpi = 300)
+showtext_auto(enable = TRUE)
+
+## text and themes
+font_add_google("Roboto", "Font")
+font_add_google("Roboto Mono", "B_Font")
+# font_add_google("Dancing Script", "B_Font")
+big_font <- "B_Font"
+main_font <- "Font"
+showtext_auto(TRUE)
+
+main_title_boy <- "Top Baby Names in England and Wales (Boys)"
+main_title_girl <- "Top Baby Names in England and Wales (Girls)"
+# sub_title_boy <- "Baby Boys"
+cap_txt <- "@brit.viz | Data: Office for National Statistics"
+
+
+## boys
+
+
+
+boys <- 
+  Top_rank_change %>% 
+  filter(Gender.x == "Boys", 
+         ) %>% 
+  ggplot(aes(x = Year, y = Rank, group = Name.x)) + 
+  geom_line(aes(color = Top5, alpha = 1), size = 2) + 
+  geom_point(aes(color = Top5), size = 4) + 
+  scale_y_reverse(breaks = 1:10) + 
+  scale_x_continuous(breaks = c(1996, 2001, 2006, 2011, 2016, 2021)) + 
+  coord_cartesian(ylim = c(10, 1), 
+  # more spaces for geom_text
+                  xlim = c(1990.3, 2026.7)) + 
+  # text at left
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 1996, 
+                     Gender.x == "Boys", 
+                     Rank > 3), 
+            aes(label = Name.x, x = 1995), 
+            hjust = 1, 
+            size = 15/.pt, 
+            family = big_font) + 
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 1996, 
+                     Gender.x == "Boys", 
+                     Rank <= 3), 
+            aes(label = Name.x, x = 1995, color = Top5), 
+            fontface = "bold", 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 1) + 
+  # text at right
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 2021, 
+                     Gender.x == "Boys", 
+                     Rank > 3), 
+            aes(label = Name.x, x = 2022), 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 0) + 
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 2021, 
+                     Gender.x == "Boys", 
+                     Rank <= 3), 
+            aes(label = Name.x, x = 2022, color = Top5), 
+            fontface = "bold", 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 0) + 
+  
+  # theme
+  theme_grey(base_size = 16, 
+             base_family = big_font
+             ) + 
+  # scale_color_manual(values = met.brewer("Renoir")) +
+  # scale_color_manual(values = c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A", "grey")) +
+  # scale_color_manual(
+  # values = c('#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#42d4f4', '#f032e6', '#469990', '#800000', '#000075', "grey")) +
+  scale_color_manual(
+    values = c(
+      # '#e6194B', '#3cb44b', '#4363d8', '#f58231', "#42d4f4", '#f032e6', "grey"
+      "#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "grey"
+
+      )
+    ) +
+  labs(title = main_title_boy, 
+       # subtitle = sub_title_boy, 
+       caption = cap_txt) + 
+
+  theme(
+    panel.background = element_blank(), 
+    legend.position = "none", 
+    panel.grid.minor = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    plot.title.position = "plot", 
+    plot.title = element_text(family = main_font, 
+                              size = 25, 
+                              face = "bold", 
+                              margin = margin(t = 15), 
+                              
+                              ), 
+    # plot.subtitle = element_text(family = main_font, 
+    #                              size = 23, 
+    #                              margin = margin(t = 0)), 
+    plot.caption = element_text(
+      family = main_font
+    ), 
+    axis.ticks = element_blank(), 
+    axis.title.y = element_text(margin = margin(l = 10))
+  )
+
+
+```
+
+# girls
+```{r}
+
+girls <- 
+  Top_rank_change %>% 
+  filter(Gender.x == "Girls", 
+         ) %>% 
+  ggplot(aes(x = Year, y = Rank, group = Name.x)) + 
+  geom_line(aes(color = Top5, alpha = 1), size = 2) + 
+  geom_point(aes(color = Top5), size = 4) + 
+  scale_y_reverse(breaks = 1:10) + 
+  scale_x_continuous(breaks = c(1996, 2001, 2006, 2011, 2016, 2021)) + 
+  coord_cartesian(ylim = c(10, 1), 
+  # more spaces for geom_text
+                  xlim = c(1990.3, 2026.7)) + 
+  # text at left
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 1996, 
+                     Gender.x == "Girls", 
+                     Rank > 3), 
+            aes(label = Name.x, x = 1995), 
+            hjust = 1, 
+            size = 15/.pt, 
+            family = big_font) + 
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 1996, 
+                     Gender.x == "Girls", 
+                     Rank <= 3), 
+            aes(label = Name.x, x = 1995, color = Top5), 
+            fontface = "bold", 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 1) + 
+  # text at right
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 2021, 
+                     Gender.x == "Girls", 
+                     Rank > 3), 
+            aes(label = Name.x, x = 2022), 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 0) + 
+  geom_text(data = Top_rank_change %>% 
+              filter(Year == 2021, 
+                     Gender.x == "Girls", 
+                     Rank <= 3), 
+            aes(label = Name.x, x = 2022, color = Top5), 
+            fontface = "bold", 
+            family = big_font, 
+            size = 15/.pt, 
+            hjust = 0) + 
+  
+  # theme
+  theme_grey(base_size = 16, 
+             base_family = big_font
+             ) + 
+  # scale_color_manual(values = met.brewer("Renoir")) +
+  # scale_color_manual(values = c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A", "grey")) +
+  # scale_color_manual(
+  # values = c('#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#42d4f4', '#f032e6', '#469990', '#800000', '#000075', "grey")) +
+  scale_color_manual(
+    values = c(
+      # '#e6194B', '#3cb44b', '#4363d8', '#f58231', "#42d4f4", '#f032e6', "grey"
+      '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#f032e6', "grey"
+      )
+    ) +
+  labs(title = main_title_girl, 
+       # subtitle = sub_title_boy, 
+       caption = cap_txt) + 
+
+  theme(
+    panel.background = element_blank(), 
+    legend.position = "none", 
+    panel.grid.minor = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    plot.title.position = "plot", 
+    plot.title = element_text(family = main_font, 
+                              size = 25, 
+                              face = "bold", 
+                              margin = margin(t = 15), 
+                              
+                              ), 
+    # plot.subtitle = element_text(family = main_font, 
+    #                              size = 23, 
+    #                              margin = margin(t = 0)), 
+    plot.caption = element_text(
+      family = main_font
+    ), 
+    axis.ticks = element_blank(), 
+    axis.title.y = element_text(margin = margin(l = 10))
+  )
+
+```
+
+
+```{r}
+ggsave(boys, 
+       filename = "boys.png", 
+       height=20, width=20, 
+       unit = "cm", 
+       dpi = 300)
+
+ggsave(girls, 
+       filename = "girls.png", 
+       height=20, width=20, 
+       unit = "cm", 
+       dpi = 300)
+```
+
+
+
