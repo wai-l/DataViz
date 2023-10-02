@@ -1,0 +1,388 @@
+---
+title: "202309_WFHUK"
+author: "Wai"
+date: "2023-09-06"
+output: html_document
+---
+```{r}
+library(readxl)
+library(tidyverse)
+library(sysfonts)
+library(showtext)
+```
+
+```{r}
+# Read excel files
+## Weekly Data
+### create file list and add it to the imported file for ref (date of survey)
+file_list <- list.files(path = "UK_byweek_202209")
+
+
+wd <- getwd()
+
+sub_f <- "/UK_byweek_202209"
+
+path <- gsub("~", "", paste0(wd, sub_f))
+
+data_list <- list()
+
+search_pattern <- "^In the past seven days, have you worked from home\\?"
+
+?read_excel
+
+for (i in 1:length(file_list)) { 
+  
+  setwd(path)
+  
+  data <- read_excel(file_list[i], sheet = "1", col_names = FALSE)
+  
+  start_row <- grep(search_pattern, data[[1]], ignore.case = TRUE)
+  
+
+  data <- data[(start_row+1):(start_row + 5), 1:8]
+  # set file name as a new column
+  file_path = file_list[i]
+  data$filename <- basename(file_path)
+  
+  # each datat frame will get imported into data_list as a separate data frame
+  data_list[[i]] <- data
+}
+
+# combine all data
+combined_raw <- 
+  bind_rows(data_list)
+```
+
+```{r}
+# covid era data
+covid_wfh <- read_excel("UK_covid.xlsx", range = cell_rows(4:8), skip = 2)
+
+covid_wfh2 <-
+  covid_wfh %>% 
+  filter(!is.na(...1)) %>% 
+  rename("work_location" = "...1") %>% 
+  gather(key = "period", value = "percentage", 2:52) %>% 
+  mutate(period = gsub("\r\n", " ", period), 
+         period = gsub("\\[note.*?\\]", " ", period), 
+  # start date
+         start_date = as.Date(
+           gsub("to \\d{1,2}", "", period), 
+           format = "%d %b %Y"
+         )
+  ) %>% 
+  mutate(new_start_date = ifelse(is.na(start_date), 
+                             gsub(" to\\s+\\d{1,2}\\s+[a-zA-Z]{3,9}\\s+", " ", period), 
+                             NA), 
+         new_start_date = as.Date(new_start_date, format = "%d %b %Y"), 
+         start_date = case_when(is.na(start_date) ~ new_start_date,
+                             TRUE ~ start_date
+                           )) %>% 
+  # end date
+  mutate(end_date = as.Date(
+    gsub("\\d{1,2}\\s+[a-zA-Z]{3,9}\\s+\\d{4}\\s+to", "", period), 
+    format = "%d %b %Y"), 
+    end_date_n = ifelse(is.na(end_date),
+                        gsub("\\d{1,2}\\s+to", "", period),
+                        NA),
+    end_date_n = gsub("\\d{1,2}\\s+[a-zA-Z]{3,9}\\s+to","", end_date_n), 
+    end_date_n = as.Date(end_date_n, format = "%d %B %Y"), 
+    end_date = case_when(is.na(end_date) ~ end_date_n,
+                         TRUE ~ end_date)
+    ) %>% 
+  # percentage recal
+  group_by(period) %>% 
+  mutate(new_total = sum(percentage), 
+         new_percentage = percentage/new_total*100) %>% 
+  ungroup() %>% 
+# clean up and ready for mergge
+  select(wfh_status = work_location,
+         start_date,
+         end_date,
+         percentage = new_percentage)
+    
+
+```
+
+
+```{r}
+covid_wfh3 <- 
+covid_wfh2 %>% 
+  mutate(wfh_status = str_replace_all(wfh_status, 
+                                      c("Both worked from home and travelled to work" = "Hybrid working", 
+                                        "Worked from home only \\(not travelled to work\\)" = "Work from home", 
+                                        "Travelled to work only \\(not worked from home\\)" = "Travel to work")))
+
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+# data since 2022-09
+
+colnames(combined_raw) <- c("In the past seven days, have you worked from home?", "All persons %", "Aged 16 to 29 %", "Aged 30 to 49 %", "Aged 50 to 69 %", "Aged 70 and over %", "Men %", "Women %", "filename")
+
+combined_raw <- 
+  combined_raw %>% 
+  mutate_at(vars(matches("%")), as.numeric)
+
+# file name amend so we can power through with regex
+combined_raw$filename[combined_raw$filename == "workingarrangements22november4december2022.xlsx"] <- "workingarrangements22novemberto4december2022.xlsx"	
+combined_raw$filename[combined_raw$filename == "workingarrangements8november20november2022.xlsx"] <- "workingarrangements8novemberto20november2022.xlsx"	
+
+# extract end date
+combined_raw$end_date_ext <- 
+  str_extract(combined_raw$filename, "to(\\d{1,2}[a-zA-Z]{3,9}\\d{4})")
+
+combined_raw$end_date <- sub("to", "", combined_raw$end_date_ext)
+
+combined_raw <- 
+  combined_raw %>% 
+  mutate(end_date_new = as.Date(end_date, format = "%d%b%Y"))
+
+# extract start date
+combined_raw$start_date_ext <- 
+  sub("workingarrangements", "", combined_raw$filename) %>% 
+  sub(".xlsx", "", .) %>% 
+  sub("correction", "", .)
+
+
+combined_raw$start_date <- 
+  sub("to\\d{1,2}", "", combined_raw$start_date_ext)
+
+combined_raw <- 
+  combined_raw %>% 
+  mutate(start_date_new = as.Date(start_date, format = "%d%b%Y"))
+
+
+combined_raw$start_date <- 
+  ifelse(is.na(combined_raw$start_date_new), 
+         sub("to\\d{1,2}[a-zA-Z]{3,9}", "", combined_raw$start_date_ext), 
+         combined_raw$start_date
+       )
+
+combined_raw <- 
+  combined_raw %>% 
+  mutate(start_date_new = as.Date(start_date, format = "%d%b%Y"))
+
+
+comb_cl<- 
+combined_raw %>% 
+  select(-c(filename|end_date_ext|end_date|start_date_ext|start_date)) %>% 
+  rename("end_date" = "end_date_new", 
+         "start_date" = "start_date_new")
+
+#####
+comb_cl %>% 
+  filter(`In the past seven days, have you worked from home?` != "Not worked in the past seven days") %>% 
+  group_by(end_date) %>% 
+  summarise(sum(`All persons %`))
+
+combined_raw
+  
+```
+
+```{r}
+# calculate new percentage and put the two "no" in one group -> put the two "no" in one gp, before calculating new percentage
+
+comb_cl1 <- comb_cl[c(1, 2, 9, 10)]
+
+
+comb_cl2 <- 
+  comb_cl1 %>% 
+  filter(.[1] != "Not worked in the past seven days") %>% 
+  mutate(wfh_status = ifelse(
+    `In the past seven days, have you worked from home?` %in% c("No, I am not able to work from home", "No, I have not worked from home although I am able to"), 
+    "No, I have not worked from home", 
+    `In the past seven days, have you worked from home?`
+  )) %>% 
+  mutate(date_gp = as.character(end_date)) %>% 
+  group_by(date_gp) %>% 
+  mutate(new_total = sum(`All persons %`)) %>% 
+  group_by(date_gp, wfh_status) %>% 
+  mutate(new_group_per = sum(`All persons %`)) %>% 
+  select(wfh_status, start_date, end_date, date_gp, new_total, new_group_per) %>% 
+  unique() %>% 
+  mutate(percentage = new_group_per / new_total * 100) %>% 
+  ungroup() %>% 
+  select(wfh_status, start_date, end_date, percentage) %>% 
+  mutate(wfh_status = str_replace_all(wfh_status, 
+                                      c("Yes, some of the time" = "Hybrid working", 
+                                        "Yes, all of the time" = "Work from home", 
+                                        "No, I have not worked from home" = "Travel to work")))
+
+
+  
+```
+
+```{r}
+comb_cl3 = rbind(comb_cl2, covid_wfh3)
+
+comb_cl4 <-
+  comb_cl3 %>%
+  mutate(
+    wfh_status = factor(wfh_status, levels = c("Work from home", "Hybrid working", "Travel to work")), 
+    date_range = map2(start_date, end_date, seq, by = "day")) %>%
+    unnest(date_range) %>% 
+  filter(date_range == start_date|date_range == end_date) %>% 
+  arrange(date_range)
+
+comb_cl4
+```
+
+
+
+```{r fig.asp = 1}
+
+
+block_start <- max(covid_wfh3$end_date)
+#[1] "2022-05-08"
+
+block_end <- min(comb_cl2$start_date)
+#[1] "2022-09-14"
+
+# text and theme
+font_add_google("Roboto", "Font")
+font_add_google("Roboto Mono", "B_Font")
+big_font <- "B_Font"
+main_font <- "Font"
+showtext_auto(TRUE)
+
+main_title <- "Is work from home here to stay? "
+sub_title <- "Percentage of UK workers travelling to work"
+cap_txt <- "@brit.viz|Data: ons.gov.uk"
+
+comb_cl4 %>% 
+  ggplot(aes(x = date_range, y = percentage, fill = wfh_status)) +
+  geom_area() + 
+  theme_grey(base_size = 13*4,
+             base_family = big_font
+             ) + 
+  # set break and clear margin between panel and axis
+  scale_y_continuous(expand = expansion(mult = c(0, 0.025)), 
+                     breaks = c(25, 50, 75, 100), 
+                     labels = function(x) paste0(x, "%")) + 
+  scale_x_date(date_labels =  "%b %Y",
+               expand = expansion(mult = c(0.01, 0.05)), 
+               breaks = as.Date(c("2021-01-01", "2021-07-01", "2022-01-01", "2023-01-01"))
+               # breaks = c(as.Date("2021-01-01"), as.Date("2021-07-01"), as.Date("2022-01-01"))
+             ) + 
+  scale_fill_manual(values = c("#00A064", "#FFC502", "#9D6AF1")) + 
+  # basic text
+  labs(x = "", 
+       y = "", 
+       title = main_title, 
+       subtitle = sub_title, 
+       caption = cap_txt) + 
+  theme(
+    panel.background = element_blank(), 
+    plot.background = element_rect(
+      fill = "#121212", 
+      color = "#121212"
+    ), 
+    plot.title.position = "plot", 
+    plot.caption.position = "plot", 
+    legend.position = "none", 
+    panel.grid = element_blank(), 
+    axis.ticks = element_line(linewidth = 0.5, 
+                              color = "grey70"), 
+    axis.ticks.length = unit(.2, "cm"), 
+    # text aes
+    plot.title = element_text(face = "bold", 
+                              color = "#FFFFFF", 
+                              lineheight = 0.01, 
+                              size = 20*4, 
+                              margin = margin(b = 0.01, unit = "cm")), 
+    plot.subtitle = element_text(color = "#FFFFFF", 
+                                 lineheight = 0.25, 
+                                 margin = margin(t = 0)), 
+    plot.caption = element_text(color = "#FFFFFF", 
+                                margin = margin(b = -0.25, unit = "cm")), 
+    axis.text = element_text(color = "grey90", 
+                             margin= margin(0, 0, 0, 0)), 
+    axis.text.y = element_text(margin = margin(r = 0, l = -1, unit = "cm")),
+
+    
+  ) + 
+  # set a block for when survey was not carried out
+  annotate("rect",
+           xmin = block_start,
+           xmax = block_end,
+           ymin = 0,
+           ymax = 100,
+           fill = "#121212", 
+           alpha = .8) + 
+  # additional text annotation
+  # these need separate font setting
+  annotate("text", 
+           x = as.Date("2021-06-01"), 
+           y = 93, 
+           size = 14, 
+           family = big_font, 
+           label = "Work from home") + 
+  annotate("text", 
+           x = as.Date("2021-06-01"), 
+           y = 62, 
+           angle = 30, 
+           size = 14, 
+           family = big_font, 
+           label = "Hybrid working") + 
+  annotate("text", 
+           x = as.Date("2021-06-01"), 
+           y = 30, 
+           size = 14, 
+           family = big_font, 
+           label = "Travel to work") + 
+  annotate("text", 
+           x = as.Date("2022-07-05"), 
+           y = 70, 
+           family = big_font, 
+           size = 14, 
+           color = "grey90", 
+           lineheight = 0.4, 
+           label = "No \ndata \nin this \nperiod") + 
+  annotate("segment", 
+           x = as.Date("2022-03-30"), 
+           xend = as.Date("2022-03-30"), 
+           y = 0, 
+           yend = 102, 
+           linetype = "dashed", 
+           color = "grey80") + 
+  annotate("text", 
+           x = as.Date("2022-02-20"), 
+           y = 107, 
+           size = 3*4, 
+           lineheight = 0.25, 
+           family = main_font, 
+           color = "grey70", 
+           hjust = 0, 
+           label = "Survey question changed from \nif people have worked from home because of COVID \nto if they have worked from home or travelled to work. ") + 
+  annotate("text", 
+           x = as.Date("2021-01-01"), 
+           y = -13, 
+           hjust = 0, 
+           lineheight = 0.25, 
+           family = main_font, 
+           color = "grey70", 
+           size = 3*4, 
+           label = "*Responses with \"Not worked in the past seven days\", \"Don't know\" or \"Prefer not to say\" \nare excluded from the analysis. ") + 
+  # let annotation position outside of panel
+  coord_cartesian(clip = "off", 
+                  ylim = c(0, 110))
+
+
+
+```
+
+```{r}
+ggsave(filename="WFH.png", height=20, width=20, 
+       unit = "cm", 
+       dpi = 320)
+```
+
+
+
+
