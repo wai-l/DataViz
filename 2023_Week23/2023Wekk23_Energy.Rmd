@@ -1,0 +1,422 @@
+---
+title: "2023Week23 Energy"
+author: "Wai"
+date: "2023-06-12"
+output: html_document
+---
+
+# Packages
+
+```{r}
+# install.packages("tidytuesdayR")
+# install.packages("tidyverse")
+
+library(ggtext)
+library(tidytuesdayR)
+library(tidyverse)
+library(ggplot2)
+library(sysfonts)
+library(showtext)
+```
+
+# Dataset
+
+```{r}
+
+owid_energy <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-06-06/owid-energy.csv')
+
+```
+
+# Data exploration
+
+```{r}
+head(owid_energy)
+str(owid_energy)
+summary(owid_energy)
+
+owid_energy %>% 
+  filter(biofuel_cons_per_capita != 0) %>% 
+  arrange(year)
+
+# check which year to start: 
+
+# fossil = coal + oil + gas
+
+## consumption: 1965 - 2021
+
+
+energy_cons <- owid_energy %>% 
+  select(country, year, ends_with("consumption")) %>% 
+  filter_at(vars(-country, -year), any_vars(!is.na(.)))
+  
+
+view(energy_cons)
+
+
+## cons per capita: 1965 - 2021
+cons_per_cap <- 
+  owid_energy %>% 
+    select(country, year, ends_with("cons_per_capita")|ends_with("energy_per_capita")) %>% 
+    filter_at(vars(-country, -year), any_vars(!is.na(.))) %>% 
+    arrange(year)
+
+cons_per_cap %>% 
+  view()
+
+## number of country listed in different years: 1990 maybe a good year to stqrt
+owid_energy %>% 
+  group_by(year) %>% 
+  nrow()
+
+count(owid_energy, year)
+
+count(energy_cons, year)
+
+count(cons_per_cap, year)
+
+cons_per_cap %>% 
+  filter(year == 2021)
+
+energy_cons %>% 
+  filter(year == 2021)
+
+owid_energy %>% 
+  select(country, year, ends_with("cons_per_capita")) %>% 
+  filter(year == 2000)
+
+```
+
+## energy consumption
+
+```{r}
+summary(energy_cons)
+
+energy_cons_long <- 
+  gather(energy_cons, key = "energy", value = "TWh", biofuel_consumption:wind_consumption)
+
+head(energy_cons_long)
+
+energy_cons_long %>% 
+  ggplot(aes(x = year, y = TWh, group = country)
+         ) + 
+  geom_line() + 
+  facet_wrap(~energy)
+```
+
+## energy_per_capita
+
+```{r}
+summary(cons_per_cap)
+
+colnames(cons_per_cap)
+
+cons_per_cap_long <- 
+  gather(cons_per_cap, key = "energy_per_capita", value = "TWh", ends_with("per_capita"))
+
+cons_per_cap_long <- 
+  cons_per_cap_long %>% 
+  filter(!country %in% c("Asia", "Europe", "European Union (27)", "North America", "World",  "Low-income countries", "Lower-middle-income countries"), 
+         # !energy_per_capita %in% c("fossil_energy_per_capita", "energy_per_capita", "low_carbon_energy_per_capita", "renewables_energy_per_capita", "other_renewables_energy_per_capita")
+         ) %>% 
+  mutate(Group = 
+           factor(
+             ifelse(!country %in%
+                          c("High-income countries", "Upper-middle-income countries", "United Kingdom"), 
+                        "Other", 
+                        country), 
+             levels = c("United Kingdom", "High-income countries", "Upper-middle-income countries", "Others")
+))
+
+  
+# plot
+
+cons_per_cap_long %>% 
+  filter(year >= 1990) %>% 
+  ggplot(aes(x = year, y = TWh, group = country, color = Group)
+         ) + 
+  geom_line() + 
+  facet_wrap(~energy_per_capita)
+
+```
+
+```{r}
+# slice data
+
+cons_per_cap_long_big_eng_gp <- 
+  cons_per_cap_long %>% 
+  filter(year >= 1990, 
+         energy_per_capita %in% c(
+           "fossil_energy_per_capita", "low_carbon_energy_per_capita",
+                                  "renewables_energy_per_capita", 
+                                  "other_renewables_energy_per_capita"
+                                  )
+         )
+cons_per_cap_long_sm_eng_gp <- 
+  cons_per_cap_long %>% 
+  filter(year >= 1990, 
+         !energy_per_capita %in% c(
+           "fossil_energy_per_capita", "low_carbon_energy_per_capita", 
+           "renewables_energy_per_capita", 
+           # "other_renewables_energy_per_capita", 
+           "energy_per_capita", 
+           "biofuel_cons_per_capita"
+                                  )
+         ) 
+
+cons_per_cap_long_sm_eng_gp %>% 
+  select(energy_per_capita) %>% 
+  unique()
+
+high_income_summary <- 
+  cons_per_cap_long %>% 
+  filter(country == "High-income countries", 
+         energy_per_capita == "energy_per_capita", 
+         year >= 1990)
+
+high_income_summary
+
+uk <- 
+  cons_per_cap_long_sm_eng_gp %>% 
+  filter(country == "United Kingdom")
+
+uk %>% 
+  select(energy_per_capita) %>% 
+  unique()
+
+uk <- 
+  uk %>% 
+  mutate(energy_per_capita = gsub("_cons_per_capita|_energy_per_capita", "", energy_per_capita), 
+         energy_per_capita = gsub("_", " ", energy_per_capita), 
+         energy_per_capita = str_to_title(energy_per_capita), 
+         energy_per_capita = factor(energy_per_capita, 
+                                    levels = c("Other Renewables", "Solar", "Hydro", "Wind", "Nuclear", "Coal", "Gas", "Oil"))
+  )
+
+
+```
+```{r}
+## testing plots and compare with other countries
+
+cons_per_cap_long_sm_eng_gp %>% 
+  filter(country == "Japan") %>% 
+  ggplot(aes(x = year, y = TWh, fill = energy_per_capita)) + 
+  geom_col()
+
+
+cons_per_cap_long %>% 
+  filter(country == "United States", 
+         energy_per_capita == "energy_per_capita", 
+         year >= 1990) %>% 
+  ggplot(aes(x = year, y = TWh, fill = energy_per_capita)) + 
+  geom_col()
+
+
+uk %>% 
+  group_by(year) %>% 
+  summarise_at(vars(TWh), 
+               list(sum))
+
+cons_per_cap_long %>% 
+  filter(country == "United Kingdom", 
+         energy_per_capita == "energy_per_capita", 
+         year >= 1990)
+
+
+  
+```
+
+```{r fig.asp = 1}
+# theme testing
+knitr::opts_chunk$set(echo = TRUE, width = 7, height = 10)
+
+theme_britviz_demo <- 
+  function(base_size = 15, 
+           bg_c = "#F2F2F2", 
+           dark_text = "#121212", 
+           medium_text = "#333333", 
+           light_text = "#595959") {
+    font_add_google("Roboto Slab", "Font")
+    main_font <- "Font"
+    showtext_auto(TRUE)
+  
+    theme_minimal(base_size = base_size) + 
+    theme(
+          # color 
+          plot.background = element_rect(fill = bg_c, 
+                                         color = bg_c), 
+          # blank
+          panel.background = element_blank(), 
+          axis.title = element_blank(), 
+          
+          # element position
+          legend.position = "right", 
+          legend.justification =  "bottom", 
+          plot.title.position = "plot", 
+          plot.caption.position = "plot", 
+          plot.margin = margin(10, 10, 10, 10, unit = "pt"), 
+          
+          # text
+          text = element_text(color = medium_text, 
+                              family = main_font
+                              ), 
+          plot.title = element_text(size = 20, 
+                                    face = "bold", 
+                                    color = dark_text, 
+                                    margin = margin(b = 5)), 
+          plot.subtitle = element_text(size = 18), 
+          legend.title = element_text(face = "bold", 
+                                      color = medium_text), 
+          plot.caption = element_text(color = light_text, 
+                                      margin = margin(t = 10))
+          )
+  }
+# Text and theme
+
+c_high_income = "#FA1700"
+
+# fill_c = c('#762A83', '#9970AB', '#C2A5CF', '#E7D4E8','#D9F0D3', '#ACD39E', '#5AAE61', '#1B7837')
+# fill_c = c("#6CD489", "#269144", "#02C73A", "#017A23", "#D5B4DB", "#8D5697", "#B942CF", "#762A83")
+fill_c = c("#6CD489", "#269144", "#02C73A", "#017A23", "#FA8C11", "#8D5697", "#B942CF", "#762A83")
+
+uk %>% 
+  ggplot(aes(x = year, y = TWh)) + 
+  geom_col(data = uk, 
+           aes(fill = energy_per_capita)) + 
+  geom_line(data = high_income_summary, 
+            color = c_high_income
+            ) + 
+  scale_fill_manual(
+    values = fill_c) + 
+  labs(title = "The UK is consuming less energy \nin the last three decades", 
+       subtitle = "Energy consumption per capita (TWh) since 1990", 
+       caption = "@brit.viz | Data: Our World in Data - Energy Data Explorer", 
+       fill = "UK \n(by energy type)") + 
+  # diable clip of annotation to panel
+  coord_cartesian(
+    xlim = c(1990, 2021), 
+    clip = "off"
+  ) + 
+  annotate(
+    "text", 
+    label = "High income countries", 
+    x = 2025, 
+    y = 57000, 
+    color = c_high_income, 
+    family = main_font, 
+    size = 4.5, 
+    hjust = 0
+  ) + 
+  theme_britviz_demo()
+
+```
+
+```{r fig.asp = 1}
+# theme output
+# knitr::opts_chunk$set(echo = TRUE, width = 8, height = 10)
+
+theme_britviz <- 
+  function(base_size = 50, 
+           bg_c = "#F2F2F2", 
+           dark_text = "#121212", 
+           medium_text = "#333333", 
+           light_text = "#595959") {
+    font_add_google("Roboto Slab", "Font")
+    main_font <- "Font"
+    showtext_auto(TRUE)
+  
+    theme_minimal(base_size = base_size) + 
+    theme(
+          # color 
+          plot.background = element_rect(fill = bg_c, 
+                                         color = bg_c), 
+          # blank
+          panel.background = element_blank(),
+          # panel.background = element_rect(fill = "red"), 
+          # legend.background = element_rect(fill = "red"), 
+          axis.title = element_blank(), 
+          
+          # element position
+          legend.position = "right",
+          legend.justification =  "bottom",
+          legend.margin = margin(0, 0, 15, -40),
+          # legend.spacing = unit(5, "lines"),  # Adjust the legend.spacing here
+          plot.title.position = "plot", 
+          plot.caption.position = "plot", 
+          plot.margin = margin(15, 15, 10, 15, unit = "pt"),
+          panel.margin = margin(0, 0, 0, 0), 
+          
+          
+          # text
+          text = element_text(color = medium_text, 
+                              family = main_font, 
+                              lineheight = 0.3
+                              ), 
+          plot.title = element_text(size = 100, 
+                                    face = "bold", 
+                                    color = dark_text, 
+                                    margin = margin(b = 1)
+                                    ), 
+          plot.subtitle = element_text(size = 75), 
+          legend.title = element_text(face = "bold", 
+                                      color = medium_text, 
+                                      lineheight = 0.3, 
+                                      margin = margin(0, 0, -15, 0)), 
+          legend.text = element_text(margin = margin(l = -20)), 
+          plot.caption = element_text(color = light_text, 
+                                      margin = margin(t = 10)), 
+
+          # grid line
+          panel.grid = element_line(size = 0.5
+                                    )
+          )
+  }
+# Text and theme
+
+c_high_income = "#FA1700"
+
+# fill_c = c('#762A83', '#9970AB', '#C2A5CF', '#E7D4E8','#D9F0D3', '#ACD39E', '#5AAE61', '#1B7837')
+# fill_c = c("#6CD489", "#269144", "#02C73A", "#017A23", "#D5B4DB", "#8D5697", "#B942CF", "#762A83")
+fill_c = c("#6CD489", "#269144", "#02C73A", "#017A23", "#FA8C11", "#8D5697", "#B942CF", "#762A83")
+
+uk %>% 
+  ggplot(aes(x = year, y = TWh)) + 
+  geom_col(data = uk, 
+           aes(fill = energy_per_capita)) + 
+  geom_line(data = high_income_summary, 
+            color = c_high_income
+            ) + 
+  scale_fill_manual(
+    values = fill_c) + 
+  labs(title = "The UK is consuming less energy \nin the last three decades", 
+       subtitle = "Energy consumption per capita (TWh) since 1990", 
+       caption = "@brit.viz | Data: Our World in Data - Energy Data Explorer", 
+       fill = "UK \n(by energy type)") + 
+  # diable clip of annotation to panel
+  coord_cartesian(
+    xlim = c(1990, 2021), 
+    clip = "off"
+  ) + 
+  annotate(
+    "text", 
+    label = "High income \ncountries", 
+    x = 2023, 
+    y = 57000, 
+    color = c_high_income, 
+    family = main_font, 
+    face = "bold", 
+    size = 18, 
+    hjust = 0, 
+    lineheight = 0.3
+  ) + 
+  theme_britviz()
+
+```
+
+```{r}
+ggsave("2023Week23_Energy.png", 
+       height = 8, 
+       width = 8, 
+       dpi = 320)
+```
+
+
