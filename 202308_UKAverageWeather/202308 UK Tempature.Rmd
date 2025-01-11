@@ -142,9 +142,9 @@ big_font <- "B_Font"
 main_font <- "Font"
 showtext_auto(TRUE)
 
-main_title <- "UK Average Temperature 1991 - 2003"
-july_title <- "UK Average Temperature \nJuly 1991 - 2003"
-ju_title <- "UK Average Temperature \nJune - July, 1991 - 2003"
+main_title <- "UK Average Temperature 1991 - 2023"
+july_title <- "UK Average Temperature \nJuly 1991 - 2023"
+ju_title <- "UK Average Temperature \nJune - July, 1991 - 2023"
 cap_txt <- "@brit.viz | Data: Department for Energy Security & Net Zero, Met Office"
 
 
